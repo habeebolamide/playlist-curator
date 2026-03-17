@@ -67,6 +67,9 @@ function createServer(bot) {
                 }
             );
 
+            console.log("TOKEN RES:", tokenRes.data);
+            console.log("REDIRECT URI USED:", process.env.SPOTIFY_REDIRECT_URI);
+
             const accessToken = tokenRes.data.access_token;
             const export_data = spotifyTokens[chatId];
 

@@ -161,7 +161,7 @@ function initBot(bot) {
                     );
                 }
 
-                bot.sendMessage(chatId, message);
+                await bot.sendMessage(chatId, message);
 
                 spotifyTokens[chatId] = {
                     tracks: refined,
