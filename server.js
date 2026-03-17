@@ -8,8 +8,7 @@ const SPOTIFY_SCOPES = [
     "playlist-modify-private",
 ].join(" ");
 
-const pendingExports = {};
-const spotifyTokens = {};
+const { spotifyTokens, pendingExports } = require("./store");
 
 function createServer(bot) {
     const app = express();

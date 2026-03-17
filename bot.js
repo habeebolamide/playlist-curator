@@ -1,9 +1,8 @@
 const { isRateLimited, formatPlaylist, RATE_LIMIT } = require("./utils");
 const { getSpotifyToken, searchTrack, getAudioFeatures } = require("./spotify");
 const { generatePlaylist, refinePlaylist } = require("./gemini");
-const { spotifyTokens } = require("./server");
+const { userSessions, spotifyTokens } = require("./store");
 
-const userSessions = {};
 
 function initBot(bot) {
     bot.onText(/\/start/, (msg) => {
@@ -59,7 +58,36 @@ function initBot(bot) {
                 bot.sendMessage(chatId, `Please enter a valid year like 2007`);
                 return;
             }
+
+            const currentYear = new Date().getFullYear();
+            if (parseInt(text) > currentYear - 1) {
+                bot.sendMessage(
+                    chatId,
+                    `⚠️ For best results, end year should be ${currentYear - 1} or earlier. AI doesn't have reliable data on very recent releases and may suggest songs that don't exist yet.\n\nSend a different year or type *continue* to proceed anyway.`
+                );
+                session.pendingYearEnd = text;
+                session.step = "yearEndWarning";
+                return;
+            }
+
             session.yearEnd = text;
+            session.step = "artists";
+            bot.sendMessage(
+                chatId,
+                `🎤 Any specific artists to include? (optional — type *skip* to skip)`
+            );
+            return;
+        }
+
+        if (session.step === "yearEndWarning") {
+            if (text.toLowerCase() === "continue") {
+                session.yearEnd = session.pendingYearEnd;
+            } else if (!isNaN(text) && text.length === 4) {
+                session.yearEnd = text;
+            } else {
+                bot.sendMessage(chatId, `Please enter a valid year or type *continue* to proceed anyway.`);
+                return;
+            }
             session.step = "artists";
             bot.sendMessage(
                 chatId,
