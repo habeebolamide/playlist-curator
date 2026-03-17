@@ -2,6 +2,8 @@ require("dotenv").config();
 const TelegramBot = require("node-telegram-bot-api");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const axios = require("axios");
+const http = require("http");
+const port = process.env.PORT || 8080;
 
 // Initialize clients
 const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, { polling: true });
@@ -401,4 +403,11 @@ bot.on("message", async (msg) => {
     }
 });
 
-console.log("🎧 VibeList bot is running...");
+const server = http.createServer((req, res) => {
+  res.writeHead(200, { "Content-Type": "text/plain" });
+  res.end("Bot is running\n");
+});
+
+server.listen(port, () => {
+  console.log(`Health check server running on port ${port}`);
+});
