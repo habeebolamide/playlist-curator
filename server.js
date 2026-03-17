@@ -2,13 +2,12 @@ const express = require("express");
 const session = require("express-session");
 const crypto = require("crypto");
 const axios = require("axios");
+const { pendingExports } = require("./store");
 
 const SPOTIFY_SCOPES = [
     "playlist-modify-public",
     "playlist-modify-private",
 ].join(" ");
-
-const { spotifyTokens, pendingExports } = require("./store");
 
 function createServer(bot) {
     const app = express();
@@ -24,11 +23,16 @@ function createServer(bot) {
     });
 
     app.get("/login", (req, res) => {
-        const { chatId } = req.query;
-        if (!chatId) return res.send("Missing chatId");
+        const { chatId, data } = req.query;
+        if (!chatId || !data) return res.send("Missing parameters");
 
         const state = crypto.randomBytes(16).toString("hex");
-        pendingExports[state] = chatId;
+
+        // Store chatId + playlist data in pendingExports keyed by state
+        pendingExports[state] = {
+            chatId,
+            data: decodeURIComponent(data),
+        };
 
         const params = new URLSearchParams({
             response_type: "code",
@@ -43,11 +47,16 @@ function createServer(bot) {
 
     app.get("/callback", async (req, res) => {
         const { code, state } = req.query;
-        const chatId = pendingExports[state];
+        const pending = pendingExports[state];
 
-        if (!chatId) return res.send("Session expired. Please try again from Telegram.");
+        if (!pending) return res.send("Session expired. Please try again from Telegram.");
+
+        const { chatId, data } = pending;
 
         try {
+            const export_data = JSON.parse(data);
+            const { tracks, vibe, yearStart, yearEnd } = export_data;
+
             const credentials = Buffer.from(
                 `${process.env.SPOTIFY_CLIENT_ID}:${process.env.SPOTIFY_CLIENT_SECRET}`
             ).toString("base64");
@@ -67,23 +76,15 @@ function createServer(bot) {
                 }
             );
 
-            console.log("TOKEN RES:", tokenRes.data);
-            console.log("REDIRECT URI USED:", process.env.SPOTIFY_REDIRECT_URI);
-
             const accessToken = tokenRes.data.access_token;
-            const export_data = spotifyTokens[chatId];
 
-            if (!export_data) {
-                return res.send("Playlist data expired. Please generate a new playlist.");
-            }
-
-            const { tracks, vibe, yearStart, yearEnd } = export_data;
-
+            // Get Spotify user ID
             const userRes = await axios.get("https://api.spotify.com/v1/me", {
                 headers: { Authorization: `Bearer ${accessToken}` },
             });
             const userId = userRes.data.id;
 
+            // Create playlist
             const playlistRes = await axios.post(
                 `https://api.spotify.com/v1/users/${userId}/playlists`,
                 {
@@ -97,6 +98,7 @@ function createServer(bot) {
             const playlistId = playlistRes.data.id;
             const playlistUrl = playlistRes.data.external_urls.spotify;
 
+            // Add tracks
             const uris = tracks.filter((t) => t.uri).map((t) => t.uri);
 
             for (let i = 0; i < uris.length; i += 100) {
@@ -108,13 +110,13 @@ function createServer(bot) {
                 );
             }
 
+            // Notify on Telegram
             bot.sendMessage(
                 chatId,
                 `✅ Playlist exported to Spotify!\n\n🎵 ${uris.length} songs added\n\nOpen in Spotify: ${playlistUrl}`
             );
 
             delete pendingExports[state];
-            delete spotifyTokens[chatId];
 
             res.send(`
                 <html>
@@ -134,4 +136,4 @@ function createServer(bot) {
     return app;
 }
 
-module.exports = { createServer, spotifyTokens };
+module.exports = { createServer };

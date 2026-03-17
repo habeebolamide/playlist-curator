@@ -1,7 +1,7 @@
 const { isRateLimited, formatPlaylist, RATE_LIMIT } = require("./utils");
 const { getSpotifyToken, searchTrack, getAudioFeatures } = require("./spotify");
 const { generatePlaylist, refinePlaylist } = require("./gemini");
-const { userSessions, spotifyTokens } = require("./store");
+const { userSessions } = require("./store");
 
 
 function initBot(bot) {
@@ -163,12 +163,12 @@ function initBot(bot) {
 
                 await bot.sendMessage(chatId, message);
 
-                spotifyTokens[chatId] = {
+                const exportData = encodeURIComponent(JSON.stringify({
                     tracks: refined,
                     vibe: session.vibe,
                     yearStart: session.yearStart,
                     yearEnd: session.yearEnd,
-                };
+                }));
 
                 await bot.sendMessage(chatId, `Want to save this to Spotify?`, {
                     reply_markup: {
@@ -176,7 +176,7 @@ function initBot(bot) {
                             [
                                 {
                                     text: "🎵 Export to Spotify",
-                                    url: `${process.env.BASE_URL}/login?chatId=${chatId}`,
+                                    url: `${process.env.BASE_URL}/login?chatId=${chatId}&data=${exportData}`,
                                 },
                             ],
                         ],
