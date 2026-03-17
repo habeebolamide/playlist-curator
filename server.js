@@ -123,8 +123,8 @@ function createServer(bot) {
                 </html>
             `);
         } catch (err) {
-            console.error(err);
-            res.send("Something went wrong. Please try again from Telegram.");
+            console.error("CALLBACK ERROR:", err.response?.data || err.message || err);
+            res.send(`Error: ${err.response?.data?.error_description || err.message || "Unknown error"}`);
         }
     });
 
