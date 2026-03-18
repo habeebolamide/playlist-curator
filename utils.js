@@ -1,21 +1,31 @@
 const rateLimits = {};
-const RATE_LIMIT = 2;
+const RATE_LIMIT = 3;
 const RATE_WINDOW = 60 * 60 * 1000;
 
 function isRateLimited(chatId) {
     const now = Date.now();
+
     if (!rateLimits[chatId]) {
-        rateLimits[chatId] = { count: 1, windowStart: now };
-        return false;
+        rateLimits[chatId] = { count: 0, windowStart: now };
     }
+
     const userLimit = rateLimits[chatId];
+
+    // Reset window if expired
     if (now - userLimit.windowStart > RATE_WINDOW) {
-        rateLimits[chatId] = { count: 1, windowStart: now };
-        return false;
+        userLimit.count = 0;
+        userLimit.windowStart = now;
     }
-    if (userLimit.count >= RATE_LIMIT) return true;
+
+    // Block if over limit
+    if (userLimit.count >= RATE_LIMIT) {
+        const minutesLeft = Math.ceil((RATE_WINDOW - (now - userLimit.windowStart)) / 60000);
+        return { limited: true, minutesLeft };
+    }
+
+    // Increment and allow
     userLimit.count++;
-    return false;
+    return { limited: false };
 }
 
 function escapeMarkdown(text) {

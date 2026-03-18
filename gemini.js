@@ -87,7 +87,7 @@ Return ONLY a JSON object, no explanation, no markdown, just raw JSON like this:
 If no swaps were needed, return an empty array for swaps.`;
 
     try {
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
         const result = await model.generateContent(prompt);
         const raw = result.response.text().trim();
         const clean = raw.replace(/```json|```/g, "").trim();
@@ -100,15 +100,31 @@ If no swaps were needed, return an empty array for swaps.`;
 
         const finalTracks = await Promise.all(
             reordered.map(async (r) => {
-                const existing = tracks.find(
+                // Try exact title match first
+                let existing = tracks.find(
                     (t) => t.title.toLowerCase() === r.title.toLowerCase()
                 );
+
+                // Try partial match if exact fails
+                if (!existing) {
+                    existing = tracks.find(
+                        (t) =>
+                            t.title.toLowerCase().includes(r.title.toLowerCase()) ||
+                            r.title.toLowerCase().includes(t.title.toLowerCase())
+                    );
+                }
+
                 if (existing) return existing;
 
+                // It's a new replacement — fetch from Spotify to get URI
                 const newTrack = await searchTrack(token, r.title, r.artist);
                 return newTrack || { ...r, album: "Unknown Album", year: "N/A" };
             })
         );
+
+        // Log URI coverage
+        const withUri = finalTracks.filter(t => t.uri).length;
+        console.log(`✅ Tracks with URI: ${withUri}/${finalTracks.length}`);
 
         return { tracks: finalTracks, swapCount: swaps.length };
     } catch {

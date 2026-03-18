@@ -7,6 +7,8 @@ const { pendingExports } = require("./store");
 const SPOTIFY_SCOPES = [
     "playlist-modify-public",
     "playlist-modify-private",
+    "user-read-private",
+    "user-read-email",
 ].join(" ");
 
 function createServer(bot) {
@@ -42,7 +44,7 @@ function createServer(bot) {
             state,
         });
 
-        res.redirect(`https://accounts.spotify.com/authorize?${params}`);
+        res.redirect(`https://accounts.spotify.com/authorize?${params}&show_dialog=true`);
     });
 
     app.get("/callback", async (req, res) => {
@@ -79,35 +81,69 @@ function createServer(bot) {
             const accessToken = tokenRes.data.access_token;
 
             // Get Spotify user ID
-            const userRes = await axios.get("https://api.spotify.com/v1/me", {
-                headers: { Authorization: `Bearer ${accessToken}` },
-            });
+            // console.log("ACCESS TOKEN:", accessToken);
+            let userRes;
+            try {
+                userRes = await axios.get("https://api.spotify.com/v1/me", {
+                    headers: { Authorization: `Bearer ${accessToken}` },
+                });
+                // console.log("✅ User:",userRes.data, userRes.data.id, userRes.data.email);
+            } catch (userErr) {
+                console.error("❌ /me failed:", JSON.stringify(userErr.response?.data));
+                throw userErr;
+            }
+
             const userId = userRes.data.id;
+            // console.log("✅ Got user ID:", userId);
+
 
             // Create playlist
-            const playlistRes = await axios.post(
-                `https://api.spotify.com/v1/users/${userId}/playlists`,
-                {
-                    name: `VibeList — ${vibe} (${yearStart}-${yearEnd})`,
-                    description: `Curated by VibeList AI 🎧`,
-                    public: false,
-                },
-                { headers: { Authorization: `Bearer ${accessToken}` } }
-            );
+            // Create playlist
+            // console.log("Creating playlist for user:", userId);
+            let playlistRes;
+            try {
+                playlistRes = await axios.post(
+                    `https://api.spotify.com/v1/me/playlists`,
+                    {
+                        name: `VibeList — ${vibe} (${yearStart}-${yearEnd})`,
+                        description: `Curated by VibeList AI 🎧`,
+                        public: false,
+                    },
+                    { headers: { Authorization: `Bearer ${accessToken}` } }
+                );
+                // console.log("✅ Playlist created:", playlistRes.data.id);
+            } catch (playlistErr) {
+                console.error("❌ Playlist creation failed:", JSON.stringify(playlistErr.response?.data));
+                console.error("❌ Playlist creation status:", playlistErr.response?.status);
+                console.error("❌ Scopes on token:", tokenRes.data.scope);
+                throw playlistErr;
+            }
 
             const playlistId = playlistRes.data.id;
             const playlistUrl = playlistRes.data.external_urls.spotify;
 
             // Add tracks
-            const uris = tracks.filter((t) => t.uri).map((t) => t.uri);
+            // Add tracks — only valid spotify URIs
+            const uris = tracks
+                .filter((t) => t.uri && t.uri.startsWith("spotify:track:"))
+                .map((t) => t.uri);
+
+            console.log("✅ Valid URIs to add:", uris.length);
+            console.log("❌ Tracks without URI:", tracks.filter((t) => !t.uri || !t.uri.startsWith("spotify:track:")).map((t) => t.title));
 
             for (let i = 0; i < uris.length; i += 100) {
                 const chunk = uris.slice(i, i + 100);
-                await axios.post(
-                    `https://api.spotify.com/v1/playlists/${playlistId}/tracks`,
-                    { uris: chunk },
-                    { headers: { Authorization: `Bearer ${accessToken}` } }
-                );
+                try {
+                    await axios.post(
+                        `https://api.spotify.com/v1/playlists/${playlistId}/items`,
+                        { uris: chunk },
+                        { headers: { Authorization: `Bearer ${accessToken}` } }
+                    );
+                    console.log(`✅ Added chunk ${i / 100 + 1}`);
+                } catch (trackErr) {
+                    console.error("❌ Track add failed:", JSON.stringify(trackErr.response?.data));
+                    console.error("❌ Problematic URIs:", chunk);
+                }
             }
 
             // Notify on Telegram

@@ -8,10 +8,11 @@ function initBot(bot) {
     bot.onText(/\/start/, (msg) => {
         const chatId = msg.chat.id;
 
-        if (isRateLimited(chatId)) {
+        const rateCheck = isRateLimited(chatId);
+        if (rateCheck.limited) {
             bot.sendMessage(
                 chatId,
-                `⏳ You've hit the limit of ${RATE_LIMIT} playlists per hour. Come back later!`
+                `⏳ You've hit the limit of ${RATE_LIMIT} playlists per hour. Try again in ${rateCheck.minutesLeft} minute${rateCheck.minutesLeft > 1 ? "s" : ""}!`
             );
             return;
         }
