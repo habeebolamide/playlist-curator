@@ -1,5 +1,7 @@
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const { searchTrack } = require("./spotify");
+const { log } = require("./logger");
+
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
@@ -40,38 +42,47 @@ Return ONLY a JSON array, no explanation, no markdown, just raw JSON like this:
     const result = await model.generateContent(prompt);
     const raw = result.response.text().trim();
     const clean = raw.replace(/```json|```/g, "").trim();
-    return JSON.parse(clean);
+    const parsed = JSON.parse(clean);
+    log("GENERATE_PLAYLIST_RAW", { raw });
+    log("GENERATE_PLAYLIST_PARSED", { count: parsed.length, tracks: parsed });
+
+    return parsed;
 }
 
 async function refinePlaylist(tracks, vibe, token) {
-    const tracksWithFeatures = tracks.filter((t) => t?.bpm);
-    if (tracksWithFeatures.length < 3) return { tracks, swapCount: 0 };
+    // const tracksWithFeatures = tracks.filter((t) => t?.bpm);
+    // if (tracksWithFeatures.length < 3) return { tracks, swapCount: 0 };
+
+    if (tracks.length < 3) return { tracks, swapCount: 0 };
+
+    // const trackData = tracks
+    //     .map((t, i) =>
+    //         `${i + 1}. "${t.title}" by ${t.artist} | BPM: ${t.bpm || "unknown"} | Key: ${t.key || "unknown"} | Energy: ${t.energy ? t.energy.toFixed(2) : "unknown"} | Danceability: ${t.danceability ? t.danceability.toFixed(2) : "unknown"} | Mood: ${t.valence ? t.valence.toFixed(2) : "unknown"}`
+    //     )
+    //     .join("\n");
 
     const trackData = tracks
         .map((t, i) =>
-            `${i + 1}. "${t.title}" by ${t.artist} | BPM: ${t.bpm || "unknown"} | Key: ${t.key || "unknown"} | Energy: ${t.energy ? t.energy.toFixed(2) : "unknown"} | Danceability: ${t.danceability ? t.danceability.toFixed(2) : "unknown"} | Mood: ${t.valence ? t.valence.toFixed(2) : "unknown"}`
+            `${i + 1}. "${t.title}" by ${t.artist} (${t.year || "unknown year"})`
         )
         .join("\n");
 
     const prompt = `You are a professional DJ curating a ${vibe} playlist.
 
-Here are the songs with their audio features:
+Here are the songs:
 ${trackData}
 
 Your job:
-1. Reorder these songs for the best possible listening experience
-2. Identify any songs that are clear vibe breaks — songs whose BPM, energy or mood clashes badly with the surrounding songs and disrupts the flow
-3. For each vibe break, suggest a replacement song that fits the ${vibe} genre and matches the energy needed at that point in the playlist
+1. Reorder these songs for the best possible listening experience using your knowledge of each song's energy, tempo and mood
+2. Identify any songs that are clear vibe breaks — songs that clash badly with the overall ${vibe} mood
+3. For each vibe break, suggest a replacement song that fits the ${vibe} genre perfectly
 
 Consider:
-- Start with a good energy opener
-- Build energy gradually or create intentional peaks and valleys
-- Match BPM transitions smoothly (avoid jumping more than 20-30 BPM between consecutive songs)
-- Key compatibility for smooth transitions
-- Energy (0-1): higher = more intense
-- Danceability (0-1): higher = more danceable
-- Mood/Valence (0-1): higher = happier, lower = darker
+- Start with a strong opener that sets the tone
+- Build energy intentionally — create peaks and valleys
+- Use your knowledge of each song's actual BPM, energy and mood to ensure smooth transitions
 - End on a memorable note
+- Every song must serve the ${vibe} vibe
 
 Return ONLY a JSON object, no explanation, no markdown, just raw JSON like this:
 {
@@ -123,9 +134,12 @@ If no swaps were needed, return an empty array for swaps.`;
         );
 
         // Log URI coverage
-        const withUri = finalTracks.filter(t => t.uri).length;
-        console.log(`✅ Tracks with URI: ${withUri}/${finalTracks.length}`);
-
+        log("REFINE_FINAL_TRACKS", {
+            total: finalTracks.length,
+            withURI: finalTracks.filter(t => t.uri).length,
+            withoutURI: finalTracks.filter(t => !t.uri).map(t => ({ title: t.title, artist: t.artist })),
+            tracks: finalTracks.map(t => ({ title: t.title, artist: t.artist, uri: t.uri || null })),
+        });
         return { tracks: finalTracks, swapCount: swaps.length };
     } catch {
         return { tracks, swapCount: 0 };

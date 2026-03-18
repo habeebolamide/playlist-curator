@@ -1,7 +1,8 @@
 const { isRateLimited, formatPlaylist, RATE_LIMIT } = require("./utils");
 const { getSpotifyToken, searchTrack, getAudioFeatures } = require("./spotify");
 const { generatePlaylist, refinePlaylist } = require("./gemini");
-const { userSessions } = require("./store");
+const { log } = require("./logger");
+const { userSessions } = require("./store");''
 
 
 function initBot(bot) {
@@ -106,8 +107,8 @@ function initBot(bot) {
 
         if (session.step === "length") {
             const length = parseInt(text);
-            if (isNaN(length) || length < 1 || length > 50) {
-                bot.sendMessage(chatId, `Please enter a number between 1 and 50`);
+            if (isNaN(length) || length < 1 || length > 30) {
+                bot.sendMessage(chatId, `Please enter a number between 1 and 30`);
                 return;
             }
 
@@ -138,15 +139,23 @@ function initBot(bot) {
                     }
                 );
 
-                bot.sendMessage(chatId, `🎚 Analyzing audio features...`);
-                const withFeatures = await getAudioFeatures(token, withFallback);
+                log("TRACK", { track: withFallback });
+
+
+                // bot.sendMessage(chatId, `🎚 Analyzing audio features...`);
+                // const withFeatures = await getAudioFeatures(token, withFallback);
 
                 bot.sendMessage(chatId, `🎛 Optimizing flow and transitions...`);
                 const { tracks: refined, swapCount } = await refinePlaylist(
-                    withFeatures,
+                    withFallback,
                     session.vibe,
                     token
                 );
+
+                const withURI = refined.filter(t => t.uri).length;
+                const withoutURI = refined.filter(t => !t.uri).map(t => t.title);
+                console.log(`📊 After refinement — with URI: ${withURI}/${refined.length}`);
+                console.log(`📊 Missing URI:`, withoutURI);
 
                 const message = formatPlaylist(
                     refined,

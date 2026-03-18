@@ -19,11 +19,16 @@ async function getSpotifyToken() {
 }
 
 async function searchTrack(token, title, artist) {
+
+    const primaryArtist = artist
+            .split(/\s+ft\.|\s+feat\.|\s+&|,/i)[0]
+            .trim();
+
     try {
         const res = await axios.get("https://api.spotify.com/v1/search", {
             headers: { Authorization: `Bearer ${token}` },
             params: {
-                q: `track:${title} artist:${artist}`,
+                q: `track:${title} artist:${primaryArtist}`,
                 type: "track",
                 limit: 1,
             },
@@ -79,7 +84,8 @@ async function getAudioFeatures(token, tracks) {
                 valence: f.valence,
             };
         });
-    } catch {
+    } catch (err) {
+        console.error("❌ Audio features error:", err.response?.data || err.message)
         return tracks;
     }
 }

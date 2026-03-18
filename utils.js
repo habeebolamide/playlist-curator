@@ -1,6 +1,6 @@
 const rateLimits = {};
 const RATE_LIMIT = 3;
-const RATE_WINDOW = 60 * 60 * 1000;
+const RATE_WINDOW = 24 * 60 * 60 * 1000;
 
 function isRateLimited(chatId) {
     const now = Date.now();
@@ -37,10 +37,15 @@ function formatPlaylist(tracks, vibe, yearStart, yearEnd) {
     tracks.forEach((t, i) => {
         msg += `${i + 1}. ${t.title}\n`;
         msg += `   👤 ${t.artist}\n`;
-        msg += `   💿 ${t.album || "Unknown Album"} (${t.year || "N/A"})\n`;
-        if (t.bpm) {
-            msg += `   🎚 ${t.bpm} BPM · ${t.key} · Energy ${(t.energy * 100).toFixed(0)}%\n`;
-        }
+       const albumDisplay = !t.album || t.album === "Unknown Album"
+            ? "Single"
+            : t.album.toLowerCase() === t.title.toLowerCase()
+            ? "Single"
+            : t.album;
+        msg += `   💿 ${albumDisplay}${t.year && t.year !== "N/A" ? ` (${t.year})` : ""}\n`;
+        // if (t.bpm) {
+        //     msg += `   🎚 ${t.bpm} BPM · ${t.key} · Energy ${(t.energy * 100).toFixed(0)}%\n`;
+        // }
         msg += "\n";
     });
     return msg;
