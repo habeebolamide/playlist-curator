@@ -1,6 +1,6 @@
 const rateLimits = {};
-const RATE_LIMIT = 3;
-const RATE_WINDOW = 24 * 60 * 60 * 1000;
+const RATE_LIMIT = 2;
+const RATE_WINDOW = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 
 function isRateLimited(chatId) {
     const now = Date.now();
@@ -19,13 +19,26 @@ function isRateLimited(chatId) {
 
     // Block if over limit
     if (userLimit.count >= RATE_LIMIT) {
-        const minutesLeft = Math.ceil((RATE_WINDOW - (now - userLimit.windowStart)) / 60000);
-        return { limited: true, minutesLeft };
+        const timeLeft = RATE_WINDOW - (now - userLimit.windowStart);
+        const hoursLeft = Math.ceil(timeLeft / (60 * 60 * 1000));
+        const minutesLeft = Math.ceil(timeLeft / 60000);
+        return {
+            limited: true,
+            timeLeft: hoursLeft >= 1
+                ? `${hoursLeft} hour${hoursLeft > 1 ? "s" : ""}`
+                : `${minutesLeft} minute${minutesLeft > 1 ? "s" : ""}`,
+        };
     }
 
-    // Increment and allow
-    userLimit.count++;
     return { limited: false };
+}
+
+function incrementRateLimit(chatId) {
+    const now = Date.now();
+    if (!rateLimits[chatId]) {
+        rateLimits[chatId] = { count: 0, windowStart: now };
+    }
+    rateLimits[chatId].count++;
 }
 
 function escapeMarkdown(text) {
@@ -51,4 +64,4 @@ function formatPlaylist(tracks, vibe, yearStart, yearEnd) {
     return msg;
 }
 
-module.exports = { isRateLimited, escapeMarkdown, formatPlaylist, RATE_LIMIT };
+module.exports = { isRateLimited, incrementRateLimit, escapeMarkdown, formatPlaylist, RATE_LIMIT };

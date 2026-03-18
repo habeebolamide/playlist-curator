@@ -128,7 +128,7 @@ function createServer(bot) {
                 .filter((t) => t.uri && t.uri.startsWith("spotify:track:"))
                 .map((t) => t.uri);
 
-            console.log("✅ Valid URIs to add:", uris.length);
+            // console.log("✅ Valid URIs to add:", uris.length);
             console.log("❌ Tracks without URI:", tracks.filter((t) => !t.uri || !t.uri.startsWith("spotify:track:")).map((t) => t.title));
 
             for (let i = 0; i < uris.length; i += 100) {

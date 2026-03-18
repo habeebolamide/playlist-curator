@@ -43,10 +43,73 @@ Return ONLY a JSON array, no explanation, no markdown, just raw JSON like this:
     const raw = result.response.text().trim();
     const clean = raw.replace(/```json|```/g, "").trim();
     const parsed = JSON.parse(clean);
-    log("GENERATE_PLAYLIST_RAW", { raw });
     log("GENERATE_PLAYLIST_PARSED", { count: parsed.length, tracks: parsed });
 
     return parsed;
+}
+
+
+async function estimateAudioFeatures(tracks) {
+    const trackList = tracks
+        .map((t, i) => `${i + 1}. "${t.title}" by ${t.artist}`)
+        .join("\n");
+
+    const prompt = `You are a music data expert with deep knowledge of music theory and production.
+
+For each of the following songs, estimate their audio features based on your knowledge.
+Be as accurate as possible — use your knowledge of the song's production, tempo, mood and energy.
+
+Songs:
+${trackList}
+
+Return ONLY a JSON array in this exact format, no explanation, no markdown:
+[
+  {
+    "title": "Song Title",
+    "artist": "Artist Name",
+    "bpm": 98,
+    "key": "A Minor",
+    "energy": 0.75,
+    "danceability": 0.82,
+    "valence": 0.65
+  }
+]
+
+Guidelines:
+- BPM: realistic tempo (60-180)
+- Key: format as "Note Major/Minor" e.g. "F# Minor"
+- Energy: 0-1 (0 = very calm, 1 = very intense)
+- Danceability: 0-1 (0 = not danceable, 1 = very danceable)
+- Valence: 0-1 (0 = dark/sad, 1 = happy/euphoric)`;
+
+    try {
+        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+        const result = await model.generateContent(prompt);
+        const raw = result.response.text().trim();
+        const clean = raw.replace(/```json|```/g, "").trim();
+        const estimated = JSON.parse(clean);
+
+
+        // Merge estimated features back into original tracks
+        return tracks.map((track) => {
+            const estimate = estimated.find(
+                (e) => e.title.toLowerCase() === track.title.toLowerCase()
+            );
+            if (!estimate) return track;
+            return {
+                ...track,
+                bpm: estimate.bpm,
+                key: estimate.key,
+                energy: estimate.energy,
+                danceability: estimate.danceability,
+                valence: estimate.valence,
+                featuresSource: "estimated",
+            };
+        });
+    } catch (err) {
+        console.error("❌ Feature estimation error:", err.message);
+        return tracks;
+    }
 }
 
 async function refinePlaylist(tracks, vibe, token) {
@@ -66,36 +129,39 @@ async function refinePlaylist(tracks, vibe, token) {
             `${i + 1}. "${t.title}" by ${t.artist} (${t.year || "unknown year"})`
         )
         .join("\n");
+        const prompt = `You are a world class DJ with 20 years of experience curating seamless playlists.
 
-    const prompt = `You are a professional DJ curating a ${vibe} playlist.
-
-Here are the songs:
+Here are the songs with their audio features:
 ${trackData}
 
-Your job:
-1. Reorder these songs for the best possible listening experience using your knowledge of each song's energy, tempo and mood
-2. Identify any songs that are clear vibe breaks — songs that clash badly with the overall ${vibe} mood
-3. For each vibe break, suggest a replacement song that fits the ${vibe} genre perfectly
+Your job is to reorder these songs so the playlist flows like a professional DJ set.
 
-Consider:
-- Start with a strong opener that sets the tone
-- Build energy intentionally — create peaks and valleys
-- Use your knowledge of each song's actual BPM, energy and mood to ensure smooth transitions
-- End on a memorable note
-- Every song must serve the ${vibe} vibe
+STRICT RULES — you must follow these exactly:
+1. BPM transitions: never jump more than 15 BPM between consecutive songs
+2. Energy arc: the playlist must tell a story — choose ONE of these shapes:
+   - JOURNEY: start medium → build to peak → come back down softly
+   - WAVE: build → peak → brief dip → build again → final peak
+   - ASCENT: start low → steady climb → end at peak
+3. Never place two high energy songs (energy > 0.85) back to back unless BPM and key match perfectly
+4. Never drop energy by more than 0.2 in a single step
+5. Key transitions: prefer same key or relative major/minor between consecutive songs
+6. The first song sets the mood — pick something that eases the listener in
+7. The last song should feel like a satisfying ending — not an abrupt stop
 
-Return ONLY a JSON object, no explanation, no markdown, just raw JSON like this:
+For each song that is a clear vibe break and cannot be placed anywhere without disrupting flow, suggest a replacement that fits the ${vibe} genre and matches the energy needed at that position.
+
+Return ONLY a JSON object, no explanation, no markdown:
 {
   "playlist": [
     {"title": "Song Name", "artist": "Artist Name"},
     {"title": "Song Name", "artist": "Artist Name"}
   ],
   "swaps": [
-    {"removed": "Song that was replaced", "added": "Song that replaced it"}
+    {"removed": "Song that was replaced", "added": "Song that replaced it", "reason": "brief reason"}
   ]
 }
 
-If no swaps were needed, return an empty array for swaps.`;
+If no swaps were needed, return an empty swaps array.`;
 
     try {
         const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
@@ -104,7 +170,7 @@ If no swaps were needed, return an empty array for swaps.`;
         const clean = raw.replace(/```json|```/g, "").trim();
         const refined = JSON.parse(clean);
 
-        console.log("🔍 Refinement result:", JSON.stringify(refined, null, 2));
+        // console.log("🔍 Refinement result:", JSON.stringify(refined, null, 2));
 
         const reordered = refined.playlist;
         const swaps = refined.swaps || [];
@@ -146,4 +212,4 @@ If no swaps were needed, return an empty array for swaps.`;
     }
 }
 
-module.exports = { generatePlaylist, refinePlaylist };
+module.exports = { generatePlaylist, refinePlaylist, estimateAudioFeatures };

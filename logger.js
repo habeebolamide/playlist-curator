@@ -8,7 +8,7 @@ function log(label, data) {
     const entry = `\n[${timestamp}] ${label}\n${JSON.stringify(data, null, 2)}\n${"─".repeat(80)}`;
     
     // Log to console
-    console.log(`[${label}]`, JSON.stringify(data, null, 2));
+    // console.log(`[${label}]`, JSON.stringify(data, null, 2));
     
     // Log to file
     fs.appendFileSync(LOG_FILE, entry);

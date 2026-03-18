@@ -1,6 +1,6 @@
-const { isRateLimited, formatPlaylist, RATE_LIMIT } = require("./utils");
+const { isRateLimited, incrementRateLimit, formatPlaylist, RATE_LIMIT } = require("./utils");
 const { getSpotifyToken, searchTrack, getAudioFeatures } = require("./spotify");
-const { generatePlaylist, refinePlaylist } = require("./gemini");
+const { generatePlaylist, refinePlaylist, estimateAudioFeatures } = require("./gemini");
 const { log } = require("./logger");
 const { userSessions } = require("./store");''
 
@@ -13,8 +13,9 @@ function initBot(bot) {
         if (rateCheck.limited) {
             bot.sendMessage(
                 chatId,
-                `⏳ You've hit the limit of ${RATE_LIMIT} playlists per hour. Try again in ${rateCheck.minutesLeft} minute${rateCheck.minutesLeft > 1 ? "s" : ""}!`
+                `⏳ You've used your ${RATE_LIMIT} playlists for today. Come back in ${rateCheck.timeLeft}! 🎧`
             );
+            delete userSessions[chatId];
             return;
         }
 
@@ -139,15 +140,15 @@ function initBot(bot) {
                     }
                 );
 
-                log("TRACK", { track: withFallback });
-
-
                 // bot.sendMessage(chatId, `🎚 Analyzing audio features...`);
-                // const withFeatures = await getAudioFeatures(token, withFallback);
+                const withFeatures = await estimateAudioFeatures(withFallback);
 
-                bot.sendMessage(chatId, `🎛 Optimizing flow and transitions...`);
+                log("ESTIMATED_AUDIO_FEATURES", { withFeatures });
+
+
+                await bot.sendMessage(chatId, `🎛 Optimizing flow and transitions...`);
                 const { tracks: refined, swapCount } = await refinePlaylist(
-                    withFallback,
+                    withFeatures,
                     session.vibe,
                     token
                 );
@@ -192,6 +193,8 @@ function initBot(bot) {
                         ],
                     },
                 });
+
+                incrementRateLimit(chatId);
 
                 bot.sendMessage(chatId, `🔁 Type /start to generate another playlist`);
             } catch (err) {
