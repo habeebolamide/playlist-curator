@@ -1,6 +1,6 @@
 const rateLimits = {};
 const RATE_LIMIT = 3;
-const RATE_WINDOW = 24 * 60 * 60 * 1000;
+const RATE_WINDOW =  60 * 1000;
 
 function isRateLimited(chatId) {
     const now = Date.now();
