@@ -6,7 +6,7 @@ A Telegram bot that curates intelligent, DJ-quality playlists using AI. Describe
 
 ## 🚀 Features
 
-- **AI Curation** — Gemini AI curates playlists with deep knowledge of Afrobeats, Afropop, Amapiano, Hip Hop, R&B and more
+- **AI Curation** — DeepSeek AI curates playlists with deep knowledge of Afrobeats, Afropop, Amapiano, Hip Hop, R&B and more
 - **Audio Intelligence** — Spotify's audio features API provides real BPM, key, energy and danceability data for every track
 - **DJ Flow Refinement** — A second AI pass reorders songs and swaps vibe-breaking tracks for smooth transitions
 - **Spotify Export** — OAuth-powered export directly to the user's Spotify account *(in progress)*
@@ -21,8 +21,8 @@ A Telegram bot that curates intelligent, DJ-quality playlists using AI. Describe
 |---|---|
 | Interface | Telegram Bot |
 | Bot Framework | node-telegram-bot-api |
-| AI Curation | Google Gemini 2.5 Flash |
-| AI Refinement | Google Gemini 1.5 Flash |
+| AI Curation | DeepSeek V4 Flash |
+| AI Refinement | DeepSeek V4 Flash |
 | Music Data | Spotify Web API |
 | Server | Express.js |
 | Hosting | Render |
@@ -37,7 +37,7 @@ vibelistbot/
 ├── bot.js          # Telegram conversation flow
 ├── server.js       # Express server + Spotify OAuth routes
 ├── spotify.js      # Spotify API functions
-├── gemini.js       # AI playlist generation and refinement
+├── deepseek.js     # AI playlist generation and refinement
 ├── utils.js        # Rate limiting, formatting helpers
 ├── store.js        # Shared in-memory state
 └── .env            # Environment variables
@@ -50,10 +50,10 @@ vibelistbot/
 ```
 User describes vibe →
 Bot asks year range, optional artists, length →
-Gemini curates initial playlist →
+DeepSeek curates initial playlist →
 Spotify enriches each track with album, year, URI →
 Spotify audio features API fetches BPM, key, energy →
-Gemini refines order and swaps vibe-breaking tracks →
+DeepSeek refines order and swaps vibe-breaking tracks →
 User receives final DJ-quality playlist →
 Optional: Export directly to Spotify
 ```
@@ -65,7 +65,7 @@ Optional: Export directly to Spotify
 ### Prerequisites
 - Node.js v18+
 - Telegram Bot Token (via @BotFather)
-- Google Gemini API Key (via aistudio.google.com)
+- DeepSeek API Key (via platform.deepseek.com)
 - Spotify Developer App (via developer.spotify.com)
 
 ### Installation
@@ -82,7 +82,7 @@ Create a `.env` file in the root:
 
 ```env
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token
-GEMINI_API_KEY=your_gemini_api_key
+DEEPSEEK_API_KEY=your_deepseek_api_key
 SPOTIFY_CLIENT_ID=your_spotify_client_id
 SPOTIFY_CLIENT_SECRET=your_spotify_client_secret
 SPOTIFY_REDIRECT_URI=https://your-domain.com/callback
@@ -110,7 +110,7 @@ Update `SPOTIFY_REDIRECT_URI` and `BASE_URL` in `.env` with your ngrok URL.
 ## 📦 Dependencies
 
 ```bash
-npm install node-telegram-bot-api @google/generative-ai axios express express-session dotenv
+npm install node-telegram-bot-api axios express express-session dotenv
 ```
 
 ---
@@ -153,7 +153,7 @@ npm install node-telegram-bot-api @google/generative-ai axios express express-se
 ## 🗺 Roadmap
 
 - Telegram bot with full conversation flow
-- AI playlist curation (Gemini)
+- AI playlist curation (DeepSeek)
 - Spotify track enrichment
 - Audio features analysis (BPM, key, energy)
 - DJ flow refinement with song swapping

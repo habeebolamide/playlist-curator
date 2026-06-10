@@ -1,8 +1,11 @@
 const express = require("express");
 const session = require("express-session");
-const crypto = require("crypto");
-const axios = require("axios");
+const { createHttpClient } = require("./http");
+const { exchangeCodeForToken } = require("./spotify");
 const { pendingExports } = require("./store");
+
+// Credential-redacted client for Spotify user-API calls
+const http = createHttpClient(15000);
 
 const SPOTIFY_SCOPES = [
     "playlist-modify-public",
@@ -25,23 +28,17 @@ function createServer(bot) {
     });
 
     app.get("/login", (req, res) => {
-        const { chatId, data } = req.query;
-        if (!chatId || !data) return res.send("Missing parameters");
-
-        const state = crypto.randomBytes(16).toString("hex");
-
-        // Store chatId + playlist data in pendingExports keyed by state
-        pendingExports[state] = {
-            chatId,
-            data: decodeURIComponent(data),
-        };
+        const { eid } = req.query;
+        const pending = pendingExports[eid];
+        if (!pending) return res.send("This export link has expired. Generate a new playlist in Telegram.");
 
         const params = new URLSearchParams({
             response_type: "code",
             client_id: process.env.SPOTIFY_CLIENT_ID,
             scope: SPOTIFY_SCOPES,
             redirect_uri: process.env.SPOTIFY_REDIRECT_URI,
-            state,
+            // The export id is random and deleted after use — safe to double as OAuth state
+            state: eid,
         });
 
         res.redirect(`https://accounts.spotify.com/authorize?${params}&show_dialog=true`);
@@ -53,38 +50,17 @@ function createServer(bot) {
 
         if (!pending) return res.send("Session expired. Please try again from Telegram.");
 
-        const { chatId, data } = pending;
+        const { chatId, tracks, vibe, yearStart, yearEnd } = pending;
 
         try {
-            const export_data = JSON.parse(data);
-            const { tracks, vibe, yearStart, yearEnd } = export_data;
-
-            const credentials = Buffer.from(
-                `${process.env.SPOTIFY_CLIENT_ID}:${process.env.SPOTIFY_CLIENT_SECRET}`
-            ).toString("base64");
-
-            const tokenRes = await axios.post(
-                "https://accounts.spotify.com/api/token",
-                new URLSearchParams({
-                    grant_type: "authorization_code",
-                    code,
-                    redirect_uri: process.env.SPOTIFY_REDIRECT_URI,
-                }).toString(),
-                {
-                    headers: {
-                        Authorization: `Basic ${credentials}`,
-                        "Content-Type": "application/x-www-form-urlencoded",
-                    },
-                }
-            );
-
-            const accessToken = tokenRes.data.access_token;
+            const tokenData = await exchangeCodeForToken(code);
+            const accessToken = tokenData.access_token;
 
             // Get Spotify user ID
             // console.log("ACCESS TOKEN:", accessToken);
             let userRes;
             try {
-                userRes = await axios.get("https://api.spotify.com/v1/me", {
+                userRes = await http.get("https://api.spotify.com/v1/me", {
                     headers: { Authorization: `Bearer ${accessToken}` },
                 });
                 // console.log("✅ User:",userRes.data, userRes.data.id, userRes.data.email);
@@ -102,7 +78,7 @@ function createServer(bot) {
             // console.log("Creating playlist for user:", userId);
             let playlistRes;
             try {
-                playlistRes = await axios.post(
+                playlistRes = await http.post(
                     `https://api.spotify.com/v1/me/playlists`,
                     {
                         name: `VibeList — ${vibe} (${yearStart}-${yearEnd})`,
@@ -115,7 +91,7 @@ function createServer(bot) {
             } catch (playlistErr) {
                 console.error("❌ Playlist creation failed:", JSON.stringify(playlistErr.response?.data));
                 console.error("❌ Playlist creation status:", playlistErr.response?.status);
-                console.error("❌ Scopes on token:", tokenRes.data.scope);
+                console.error("❌ Scopes on token:", tokenData.scope);
                 throw playlistErr;
             }
 
@@ -134,7 +110,7 @@ function createServer(bot) {
             for (let i = 0; i < uris.length; i += 100) {
                 const chunk = uris.slice(i, i + 100);
                 try {
-                    await axios.post(
+                    await http.post(
                         `https://api.spotify.com/v1/playlists/${playlistId}/items`,
                         { uris: chunk },
                         { headers: { Authorization: `Bearer ${accessToken}` } }

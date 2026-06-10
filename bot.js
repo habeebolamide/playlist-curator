@@ -1,8 +1,11 @@
+const crypto = require("crypto");
 const { isRateLimited, incrementRateLimit, formatPlaylist, RATE_LIMIT } = require("./utils");
-const { getSpotifyToken, searchTrack, getAudioFeatures } = require("./spotify");
-const { generatePlaylist, refinePlaylist, estimateAudioFeatures } = require("./gemini");
+const { getSpotifyToken, searchTrack, getAudioFeatures, isNetworkError } = require("./spotify");
+const { generatePlaylist, refinePlaylist, estimateAudioFeatures } = require("./deepseek");
 const { log } = require("./logger");
-const { userSessions } = require("./store");''
+const { userSessions, pendingExports } = require("./store");
+
+const EXPORT_TTL = 2 * 60 * 60 * 1000; // export links valid for 2 hours
 
 
 function initBot(bot) {
@@ -63,10 +66,10 @@ function initBot(bot) {
             }
 
             const currentYear = new Date().getFullYear();
-            if (parseInt(text) > currentYear - 1) {
+            if (parseInt(text) > currentYear) {
                 bot.sendMessage(
                     chatId,
-                    `⚠️ For best results, end year should be ${currentYear - 1} or earlier. AI doesn't have reliable data on very recent releases and may suggest songs that don't exist yet.\n\nSend a different year or type *continue* to proceed anyway.`
+                    `⚠️ For best results, end year should be ${currentYear} or earlier. AI doesn't have reliable data on very recent releases and may suggest songs that don't exist yet.\n\nSend a different year or type *continue* to proceed anyway.`
                 );
                 session.pendingYearEnd = text;
                 session.step = "yearEndWarning";
@@ -136,7 +139,7 @@ function initBot(bot) {
                     spotifyTrack || {
                         ...suggestions[i],
                         album: "Unknown Album",
-                        year: "N/A",
+                        year: suggestions[i].year || "N/A",
                     }
                 );
 
@@ -174,12 +177,21 @@ function initBot(bot) {
 
                 await bot.sendMessage(chatId, message);
 
-                const exportData = encodeURIComponent(JSON.stringify({
+                // Store the playlist server-side and put only a short id in the URL,
+                // so Telegram's link-confirmation popup stays small
+                for (const [id, entry] of Object.entries(pendingExports)) {
+                    if (Date.now() - (entry.createdAt || 0) > EXPORT_TTL) delete pendingExports[id];
+                }
+
+                const exportId = crypto.randomBytes(16).toString("hex");
+                pendingExports[exportId] = {
+                    chatId,
                     tracks: refined,
                     vibe: session.vibe,
                     yearStart: session.yearStart,
                     yearEnd: session.yearEnd,
-                }));
+                    createdAt: Date.now(),
+                };
 
                 await bot.sendMessage(chatId, `Want to save this to Spotify?`, {
                     reply_markup: {
@@ -187,7 +199,7 @@ function initBot(bot) {
                             [
                                 {
                                     text: "🎵 Export to Spotify",
-                                    url: `${process.env.BASE_URL}/login?chatId=${chatId}&data=${exportData}`,
+                                    url: `${process.env.BASE_URL}/login?eid=${exportId}`,
                                 },
                             ],
                         ],
@@ -198,10 +210,16 @@ function initBot(bot) {
 
                 bot.sendMessage(chatId, `🔁 Type /start to generate another playlist`);
             } catch (err) {
-                console.error(err);
+                if (isNetworkError(err)) {
+                    console.error(`❌ Playlist generation failed: network error (${err.code})`);
+                } else {
+                    console.error(err);
+                }
                 bot.sendMessage(
                     chatId,
-                    `Something went wrong generating your playlist. Try /start again.`
+                    isNetworkError(err)
+                        ? `📡 Network hiccup — couldn't reach the music services. Try /start again in a moment.`
+                        : `Something went wrong generating your playlist. Try /start again.`
                 );
             }
 
