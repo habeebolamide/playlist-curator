@@ -27,8 +27,8 @@ function createServer(bot) {
         res.send("VibeList bot is running 🎧");
     });
 
-    app.get("/login", (req, res) => {
-        const { eid } = req.query;
+    app.get("/e/:id", (req, res) => {
+        const eid = req.params.id;
         const pending = pendingExports[eid];
         if (!pending) return res.send("This export link has expired. Generate a new playlist in Telegram.");
 

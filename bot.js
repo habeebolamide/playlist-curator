@@ -43,6 +43,16 @@ function initBot(bot) {
 
         if (session.step === "vibe") {
             session.vibe = text;
+            session.step = "vibeDescription";
+            bot.sendMessage(
+                chatId,
+                `📝 Describe what you mean by *${text}* — the mood, era, or feel you're after. (optional — type *skip* to skip)\n\ne.g. "old gem afrobeat that made the world wow"`
+            );
+            return;
+        }
+
+        if (session.step === "vibeDescription") {
+            session.vibeDescription = text.toLowerCase() === "skip" ? null : text;
             session.step = "yearStart";
             bot.sendMessage(chatId, `🗓 What year should the playlist start from? (e.g. 2000)`);
             return;
@@ -127,7 +137,8 @@ function initBot(bot) {
                     session.yearStart,
                     session.yearEnd,
                     session.artists,
-                    session.length
+                    session.length,
+                    session.vibeDescription
                 );
 
                 const token = await getSpotifyToken();
@@ -153,7 +164,8 @@ function initBot(bot) {
                 const { tracks: refined, swapCount } = await refinePlaylist(
                     withFeatures,
                     session.vibe,
-                    token
+                    token,
+                    session.vibeDescription
                 );
 
                 const withURI = refined.filter(t => t.uri).length;
@@ -183,7 +195,7 @@ function initBot(bot) {
                     if (Date.now() - (entry.createdAt || 0) > EXPORT_TTL) delete pendingExports[id];
                 }
 
-                const exportId = crypto.randomBytes(16).toString("hex");
+                const exportId = crypto.randomBytes(8).toString("base64url");
                 pendingExports[exportId] = {
                     chatId,
                     tracks: refined,
@@ -199,7 +211,7 @@ function initBot(bot) {
                             [
                                 {
                                     text: "🎵 Export to Spotify",
-                                    url: `${process.env.BASE_URL}/login?eid=${exportId}`,
+                                    url: `${process.env.BASE_URL}/e/${exportId}`,
                                 },
                             ],
                         ],

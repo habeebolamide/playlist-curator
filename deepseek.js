@@ -37,7 +37,7 @@ async function callDeepSeek(prompt, jsonMode = false, system = null) {
     return response.data.choices[0].message.content.trim();
 }
 
-async function generatePlaylist(vibe, yearStart, yearEnd, artists, length) {
+async function generatePlaylist(vibe, yearStart, yearEnd, artists, length, description) {
     const system = `You are VibeList's head curator — a world-class DJ and music encyclopedist.
 
 African music is your home turf: Afrobeats, Afropop, Amapiano, Highlife, Alté, Gqom and Afro-fusion across the Nigerian, Ghanaian and South African scenes — from Fela Kuti, 2Baba, P-Square and D'banj through Wizkid, Davido, Burna Boy, Olamide, Tiwa Savage and Adekunle Gold to Rema, Asake, Tems, Ayra Starr, Fireboy DML, Seyi Vibez and Shallipopi. You bring the same depth to Hip Hop, R&B, Dancehall, Reggae, Soul and Pop.
@@ -48,11 +48,15 @@ You know the difference between a song that merely charted and a song that moves
         ? `- Requested artists: ${artists}. Feature them where they genuinely fit, but never force a track that breaks the vibe.`
         : `- Artists: curator's choice — whoever serves the vibe best.`;
 
+    const descriptionLine = description
+        ? `- What they mean by "${vibe}": ${description}. Let this description guide your picks — it's the truest signal of the mood and feel they're after.`
+        : null;
+
     const prompt = `Curate a playlist of exactly ${length} songs.
 
 THE BRIEF
 - Vibe: ${vibe}
-- Era: ${yearStart}–${yearEnd} (original release year — strict)
+${descriptionLine ? descriptionLine + "\n" : ""}- Era: ${yearStart}–${yearEnd} (original release year — strict)
 ${artistLine}
 
 SELECTION RULES — in priority order:
@@ -148,7 +152,7 @@ Guidelines:
     }
 }
 
-async function refinePlaylist(tracks, vibe, token) {
+async function refinePlaylist(tracks, vibe, token, description) {
     if (tracks.length < 3) return { tracks, swapCount: 0 };
 
     const trackData = tracks
@@ -182,7 +186,7 @@ STRICT RULES — you must follow these exactly to ensure the mix is seamless and
    - The first song must capture attention and ease the listener into the groove.
    - The last song must feel like a satisfying, epic ending.
 
-For any song in the list that is a vibe-killer, tempo anomaly, or breaks the flow of the set, you MUST swap it. Suggest a replacement song from the "${vibe}" genre that fits the energy and keeps the momentum burning.
+For any song in the list that is a vibe-killer, tempo anomaly, or breaks the flow of the set, you MUST swap it. Suggest a replacement song from the "${vibe}" genre${description ? ` (${description})` : ""} that fits the energy and keeps the momentum burning.
 
 Return ONLY a JSON object, no explanation, no markdown:
 {
